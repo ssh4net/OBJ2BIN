@@ -19,6 +19,7 @@
 #include <filesystem>
 #include <vector>
 #include <tuple>
+#include <chrono>
 #include "rapidobj/rapidobj.hpp"
 
 void ReportError(const rapidobj::Error& error)
@@ -74,10 +75,13 @@ void writeAsciiData(const std::string& filename, const std::vector<T>& data, con
 
 int main(int argc, char** argv)
 {
-	if (argc != 2) {
-		std::cerr << "Usage: OBJ2BIN path_to_file.obj\n";
+    if (argc < 2) {
+		std::cerr << "Usage: OBJ2BIN path_to_file.obj [ASCII]\n";
 		return 1;
 	}
+
+	auto start = std::chrono::high_resolution_clock::now();
+
     // Load the OBJ file
 	rapidobj::Result result = rapidobj::ParseFile(argv[1]);
     if (result.error) {
@@ -85,9 +89,23 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
+	auto end1 = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double> elapsed1 = end1 - start;
+
+	std::cout << "OBJ file loaded successfully in " << elapsed1.count() << " seconds.\n";
+
 	std::filesystem::path obj_path = argv[1];
 	std::filesystem::path obj_dir = obj_path.parent_path();
 	std::filesystem::path obj_name_we = obj_path.stem();
+    
+	std::string ascii_str = (argc == 3) ? argv[2] : "";
+
+	if (!ascii_str.empty()) {
+		std::transform(ascii_str.begin(), ascii_str.end(), ascii_str.begin(),
+			[](unsigned char c) { return std::tolower(c); });
+	}
+
+	bool is_ascii = (argc == 3 && std::string(ascii_str) == "ascii");
 
     if (result.shapes.empty()) {
         std::cerr << "No shapes found in OBJ file.\n";
@@ -127,18 +145,31 @@ int main(int argc, char** argv)
         indices.push_back(uniqueVertices[key]);
     }
 
-    // Write data to binary files
-	writeBinaryData((obj_dir / obj_name_we += "_vert.bin").string(), vertices);
-    writeBinaryData((obj_dir / obj_name_we += "_uv.bin").string(), uvs);
-    writeBinaryData((obj_dir / obj_name_we += "_norm.bin").string(), normals);
-    writeBinaryData((obj_dir / obj_name_we += "_idxs.bin").string(), indices);
+	auto end2 = std::chrono::high_resolution_clock::now();
 
-	// Write data to ASCII files
-	writeAsciiData((obj_dir / obj_name_we += "_vert.txt").string(), vertices, 3);
-	writeAsciiData((obj_dir / obj_name_we += "_uv.txt").string(), uvs, 2);
-	writeAsciiData((obj_dir / obj_name_we += "_norm.txt").string(), normals, 3);
-	writeAsciiData((obj_dir / obj_name_we += "_idxs.txt").string(), indices, 3);
+	std::chrono::duration<double> elapsed2 = end2 - end1;
+	std::cout << "Data processed successfully in " << elapsed2.count() << " seconds.\n";
 
-    std::cout << "Export completed successfully.\n";
+	if (is_ascii) {
+		std::cout << "Exporting data to ASCII files...\n";
+		// Write data to ASCII files
+		writeAsciiData((obj_dir / obj_name_we += "_vert.txt").string(), vertices, 3);
+		writeAsciiData((obj_dir / obj_name_we += "_uv.txt").string(), uvs, 2);
+		writeAsciiData((obj_dir / obj_name_we += "_norm.txt").string(), normals, 3);
+		writeAsciiData((obj_dir / obj_name_we += "_idxs.txt").string(), indices, 3);
+	}
+	else {
+		std::cout << "Exporting data to binary files...\n";
+		// Write data to binary files
+		writeBinaryData((obj_dir / obj_name_we += "_vert.bin").string(), vertices);
+		writeBinaryData((obj_dir / obj_name_we += "_uv.bin").string(), uvs);
+		writeBinaryData((obj_dir / obj_name_we += "_norm.bin").string(), normals);
+		writeBinaryData((obj_dir / obj_name_we += "_idxs.bin").string(), indices);
+	}
+
+	auto end3 = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double> elapsed3 = end3 - end2;
+
+	std::cout << "Data exported successfully in " << elapsed3.count() << " seconds.\n";
     return 0;
 }
